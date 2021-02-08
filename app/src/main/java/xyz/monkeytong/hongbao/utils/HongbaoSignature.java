@@ -14,16 +14,22 @@ public class HongbaoSignature {
         try {
             /* The hongbao container node. It should be a LinearLayout. By specifying that, we can avoid text messages. */
             AccessibilityNodeInfo hongbaoNode = node.getParent();
-            if (!"android.widget.LinearLayout".equals(hongbaoNode.getClassName())) return false;
+            if (!"android.widget.FrameLayout".equals(hongbaoNode.getClassName())) {
+                return false;
+            }
 
             /* The text in the hongbao. Should mean something. */
             String hongbaoContent = hongbaoNode.getChild(0).getText().toString();
-            if (hongbaoContent == null || "查看红包".equals(hongbaoContent)) return false;
+            if (hongbaoContent == null || "查看红包".equals(hongbaoContent)) {
+                return false;
+            }
 
             /* Check the user's exclude words list. */
             String[] excludeWordsArray = excludeWords.split(" +");
             for (String word : excludeWordsArray) {
-                if (word.length() > 0 && hongbaoContent.contains(word)) return false;
+                if (word.length() > 0 && hongbaoContent.contains(word)) {
+                    return false;
+                }
             }
 
             /* The container node for a piece of message. It should be inside the screen.
@@ -32,11 +38,15 @@ public class HongbaoSignature {
 
             Rect bounds = new Rect();
             messageNode.getBoundsInScreen(bounds);
-            if (bounds.top < 0) return false;
+            if (bounds.top < 0) {
+                return false;
+            }
 
             /* The sender and possible timestamp. Should mean something too. */
             String[] hongbaoInfo = getSenderContentDescriptionFromNode(messageNode);
-            if (this.getSignature(hongbaoInfo[0], hongbaoContent, hongbaoInfo[1]).equals(this.toString())) return false;
+            if (this.getSignature(hongbaoInfo[0], hongbaoContent, hongbaoInfo[1]).equals(this.toString())) {
+                return false;
+            }
 
             /* So far we make sure it's a valid new coming hongbao. */
             this.sender = hongbaoInfo[0];
@@ -79,10 +89,14 @@ public class HongbaoSignature {
             AccessibilityNodeInfo thisNode = node.getChild(i);
             if ("android.widget.ImageView".equals(thisNode.getClassName()) && "unknownSender".equals(result[0])) {
                 CharSequence contentDescription = thisNode.getContentDescription();
-                if (contentDescription != null) result[0] = contentDescription.toString().replaceAll("头像$", "");
+                if (contentDescription != null) {
+                    result[0] = contentDescription.toString().replaceAll("头像$", "");
+                }
             } else if ("android.widget.TextView".equals(thisNode.getClassName()) && "unknownTime".equals(result[1])) {
                 CharSequence thisNodeText = thisNode.getText();
-                if (thisNodeText != null) result[1] = thisNodeText.toString();
+                if (thisNodeText != null) {
+                    result[1] = thisNodeText.toString();
+                }
             }
         }
         return result;
