@@ -39,6 +39,10 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
     private static final String WECHAT_LUCKMONEY_DETAIL_ACTIVITY = "LuckyMoneyDetailUI";
     private static final String WECHAT_LUCKMONEY_GENERAL_ACTIVITY = "LauncherUI";
     private static final String WECHAT_LUCKMONEY_CHATTING_ACTIVITY = "ChattingUI";
+    /**
+     * 红包打开UI
+     */
+    private static final String WECHAT_LUCKMONEY_NOT_HOOK_RECEIVE_UI = "LuckyMoneyNotHookReceiveUI";
     private String currentActivityName = WECHAT_LUCKMONEY_GENERAL_ACTIVITY;
 
     private AccessibilityNodeInfo rootNodeInfo, mReceiveNode, mUnpackNode;
@@ -62,7 +66,7 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
         }
 
         setCurrentActivityName(event);
-
+        Log.d(TAG, "watchChat currentActivityName:" + currentActivityName);
         /* 检测通知消息 */
         if (!mMutex) {
             if (sharedPreferences.getBoolean("pref_watch_notification", false) && watchNotifications(event)) {
@@ -85,14 +89,22 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
 
     private void watchChat(AccessibilityEvent event) {
         this.rootNodeInfo = getRootInActiveWindow();
-
-        if (rootNodeInfo == null) {
-            return;
+        if (currentActivityName.contains(WECHAT_LUCKMONEY_NOT_HOOK_RECEIVE_UI)) {
+            openPacket();
         }
-
+        if (rootNodeInfo == null) {
+            Log.d(TAG, "watchChat rootNodeInfo:  null");
+            return;
+        } else {
+            Log.d(TAG, "watchChat rootNodeInfo: " + this.rootNodeInfo.toString());
+        }
+        //抢红包后发送消息
+        if (signature.commentString != null) {
+            sendComment();
+            signature.commentString = null;
+        }
         mReceiveNode = null;
         mUnpackNode = null;
-        Log.d(TAG, "watchChat currentActivityName:" + currentActivityName);
         checkNodeInfo(event.getEventType());
 
         /* 如果已经接收到红包并且还没有戳开 */
@@ -110,6 +122,7 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
             int delayFlag = sharedPreferences.getInt("pref_open_delay", 0) * 1000;
             new android.os.Handler().postDelayed(
                     new Runnable() {
+                        @Override
                         public void run() {
                             try {
                                 openPacket();
@@ -125,22 +138,18 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
     }
 
     private void openPacket() {
-        DisplayMetrics metrics = getResources().getDisplayMetrics();
-        float dpi = metrics.densityDpi;
-        Log.d(TAG, "openPacket！" + dpi);
-        if (android.os.Build.VERSION.SDK_INT <= 23) {
+
+        if (mUnpackNode != null) {
             mUnpackNode.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         } else {
             if (android.os.Build.VERSION.SDK_INT > 23) {
-                Log.d(TAG, "get click path");
+                DisplayMetrics metrics = getResources().getDisplayMetrics();
+                float dpi = metrics.densityDpi;
+                float width = metrics.widthPixels / 2;
+                float height = metrics.heightPixels / 3 * 2;
+                Log.d(TAG, "openPacket！" + dpi + " width=" + width + " height=" + height);
                 Path path = new Path();
-                if (640 == dpi) { //1440
-                    path.moveTo(720, 1575);
-                } else if (320 == dpi) {//720p
-                    path.moveTo(355, 780);
-                } else if (480 == dpi) {//1080p
-                    path.moveTo(533, 1115);
-                }
+                path.moveTo(width, height);
                 GestureDescription.Builder builder = new GestureDescription.Builder();
                 GestureDescription gestureDescription = builder.addStroke(new GestureDescription.StrokeDescription(path, 450, 50)).build();
                 dispatchGesture(gestureDescription, new GestureResultCallback() {
@@ -148,7 +157,6 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
                     public void onCompleted(GestureDescription gestureDescription) {
                         Log.d(TAG, "onCompleted");
                         mMutex = false;
-                        mUnpackNode.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                         super.onCompleted(gestureDescription);
                     }
 
@@ -242,6 +250,7 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
 
         //非layout元素
         if (node.getChildCount() == 0) {
+            Log.d(TAG, "findOpenButton  currentActivityName " + currentActivityName + "   className   " + node.getClassName() + "   text   " + node.getText() + "   contentDescription   " + node.getContentDescription());
             if ("android.widget.Button".equals(node.getClassName())) {
                 return node;
             } else {
@@ -266,12 +275,6 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
         if (this.rootNodeInfo == null) {
             return;
         }
-
-        if (signature.commentString != null) {
-            sendComment();
-            signature.commentString = null;
-        }
-
         /* 聊天会话窗口，遍历节点匹配“领取红包”和"查看红包" */
         AccessibilityNodeInfo node1 = (sharedPreferences.getBoolean("pref_watch_self", false)) ?
                 this.getTheLastNode(WECHAT_VIEW_OTHERS_CH, WECHAT_VIEW_SELF_CH, WECHAT_VIEW_WECHAT_CH) : this.getTheLastNode(WECHAT_VIEW_OTHERS_CH, WECHAT_VIEW_WECHAT_CH);
@@ -314,6 +317,9 @@ public class HongbaoService extends AccessibilityService implements SharedPrefer
         }
     }
 
+    /**
+     * 发送消息
+     */
     private void sendComment() {
         try {
             AccessibilityNodeInfo outNode =
